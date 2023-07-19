@@ -416,3 +416,45 @@ func Test_rewritePath(t *testing.T) {
 		})
 	}
 }
+
+func TestPlugin_FindMismatchCase(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		out, _ := ioutil.ReadFile("testdata/uppercase_secret.json")
+		w.Write(out)
+	}))
+	defer ts.Close()
+
+	client, _ := api.NewClient(&api.Config{
+		Address:    ts.URL,
+		MaxRetries: 1,
+	})
+
+	req := &secret.Request{
+		Path: "secret/docker",
+		Name: "USERNAME",
+		Build: drone.Build{
+			Event:  "push",
+			Target: "master",
+		},
+		Repo: drone.Repo{
+			Slug: "octocat/hello-world",
+		},
+	}
+	plugin := New(client, false)
+	got, err := plugin.Find(noContext, req)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	want := &drone.Secret{
+		Name: "USERNAME",
+		Data: "david",
+		Pull: true,
+		Fork: true,
+	}
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Errorf(diff)
+		return
+	}
+}
